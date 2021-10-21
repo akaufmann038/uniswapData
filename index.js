@@ -4,6 +4,7 @@ const fs = require("fs")
 const web3 = new Web3("https://mainnet.infura.io/v3/46a6dd4ac74b4ef9ae540d401b2f925f")
 const factoryAbi = require("./UniswapData/factoryABI.json")
 const pairAbi = require("./UniswapData/pairABI.json")
+const erc20Abi = require("./UniswapData/ERC20ABI.json")
 const uniswapFactory = new web3.eth.Contract(factoryAbi, "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f")
 
 const etherscanAPIKey = "MCG66J86QY7S5Z942HQD5TU9NZRZTVMZAH"
@@ -29,7 +30,6 @@ const getToken1 = async (addy) => {
     console.log(token0)
     return token0
 }
-
 
 /*
 * Returns the total number of UniswapV2 pairs in existance.
@@ -66,15 +66,46 @@ const getPoolAddresses = async () => {
     })
 }
 
-// fs.readFile("./uniswapData.json", "utf-8", (err, jsonString) => {
-//     if (err) {
-//         console.log("Error reading file from disk:", err)
-//         return
-//     }
-//     try {
-//         const myData = JSON.parse(jsonString)
-//         console.log(myData)
-//     } catch (err) {
-//         console.log("Error parsing JSON string:", err)
-//     }
-// })
+/*
+* Gets the contract addresses of token0 and token1 and the token names for every 
+* Uniswap pair.
+*/
+const getTokenData = async () => {
+    const jsonData = JSON.parse(fs.readFileSync("./UniswapData/uniswapData.json", "utf-8"))
+    for (let i = 0; i < jsonData.length; i++) {
+        // initialize pair contract object
+        const uniswapPair = new web3.eth.Contract(pairAbi, jsonData[i].poolAddress)
+
+        // get token addresses
+        const token0Address = await uniswapPair.methods.token0().call()
+        const token1Address = await uniswapPair.methods.token1().call()
+
+        // initialize token contract objects
+        const token0 = new web3.eth.Contract(erc20Abi, token0Address)
+        const token1 = new web3.eth.Contract(erc20Abi, token1Address)
+
+        // get token names
+        const token0Name = await token0.methods.name().call()
+        const token1Name = await token1.methods.name().call()
+
+        const newObj = {
+            poolAddress: jsonData[i].poolAddress,
+            token0Address: token0Address,
+            token0Name: token0Name,
+            token1Address: token1Address,
+            token1Name: token1Name
+        }
+
+        jsonData[i] = newObj
+    }
+
+    const jsonString = JSON.stringify(jsonData)
+    fs.writeFile("./UniswapData/completeData.json", jsonString, err => {
+        if (err) {
+            console.log(err)
+        } else {
+            console.log("Successfully wrote to file!")
+        }
+    })
+}
+getTokenData()
